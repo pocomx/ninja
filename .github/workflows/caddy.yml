@@ -1,0 +1,84 @@
+on:
+  push:
+    paths:
+      - '.github/workflows/caddy.yml'
+
+name: caddy
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Setup variables
+        run: |
+          echo "GOLANG=$(wget -qO- https://raw.githubusercontent.com/actions/go-versions/main/versions-manifest.json | grep 'version' | cut -d\" -f4 | head -1)" >> $GITHUB_ENV
+          echo "VERSION=v2.7.0-beta.1" >> $GITHUB_ENV
+          echo "GOPATH=$(dirname $GITHUB_WORKSPACE)" >> $GITHUB_ENV
+          echo "$(dirname $GITHUB_WORKSPACE)/bin" >> $GITHUB_PATH
+        shell: bash
+
+      - name: Install Golang
+        uses: actions/setup-go@v4
+        with: 
+          go-version: ${{ env.GOLANG }}
+
+      - name: Start build
+        run: |
+          wget https://raw.githubusercontent.com/pocomx/peace/master/src/build/caddy.sh -O caddy.sh
+          echo "Version : v2.7.0-beta.1 build 2"
+          chmod +x caddy.sh && ./caddy.sh
+
+      - name: Release
+        uses: ncipollo/release-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          name: ${{ env.VERSION }}
+          tag: ${{ env.VERSION }}
+          draft: false
+          prerelease: false
+          allowUpdates: true
+          artifacts: |
+            ./release/*
+
+  build-uot:
+    runs-on: ubuntu-22.04
+    steps:
+      
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Setup variables
+        run: |
+          echo "GOLANG=$(wget -qO- https://raw.githubusercontent.com/actions/go-versions/main/versions-manifest.json | grep 'version' | cut -d\" -f4 | head -1)" >> $GITHUB_ENV
+          echo "VERSION=v2.7.0-beta.1" >> $GITHUB_ENV
+          echo "GOPATH=$(dirname $GITHUB_WORKSPACE)" >> $GITHUB_ENV
+          echo "$(dirname $GITHUB_WORKSPACE)/bin" >> $GITHUB_PATH
+        shell: bash
+
+      - name: Install Golang
+        uses: actions/setup-go@v4
+        with: 
+          go-version: ${{ env.GOLANG }}
+
+      - name: Start build
+        run: |
+          wget https://raw.githubusercontent.com/pocomx/peace/master/src/build/caddy-uot.sh -O caddy-uot.sh
+          echo "Version : v2.7.0-beta.1 build 2"
+          chmod +x caddy-uot.sh && ./caddy-uot.sh
+
+      - name: Release
+        uses: ncipollo/release-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          name: ${{ env.VERSION }}
+          tag: ${{ env.VERSION }}
+          draft: false
+          prerelease: false
+          allowUpdates: true
+          artifacts: |
+            ./release/*

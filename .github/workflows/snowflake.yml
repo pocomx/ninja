@@ -1,0 +1,75 @@
+on:
+  push:
+    branches:
+      - main
+
+name: snowflake
+jobs:
+  build:
+    runs-on: ubuntu-20.04
+    steps:
+      
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Set Env
+        run: |
+          echo "GOLANG=$(wget -qO- https://raw.githubusercontent.com/actions/go-versions/main/versions-manifest.json | grep 'version' | cut -d\" -f4 | head -1)" >> $GITHUB_ENV
+          echo "VERSION=$(date +%Y_%m_%d_%H_%M)" >> $GITHUB_ENV
+        shell: bash
+
+      - name: Install Golang
+        uses: actions/setup-go@v3
+        with: 
+          go-version: ${{ env.GOLANG }}
+
+      - name: Start build
+        run: |
+          echo "Version is : ${{ env.VERSION }}"
+          echo "Update time is : 20230901"  
+          git clone https://git.torproject.org/pluggable-transports/snowflake snowflake
+          pushd snowflake || exit 1
+          echo "Building snowflake-linux-amd64"
+          env CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o snowflake-linux-amd64 -trimpath -ldflags "-s -w -buildid=" ./proxy
+          echo "Building snowflake-linux-arm64"
+          env CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o snowflake-linux-arm64 -trimpath -ldflags "-s -w -buildid=" ./proxy
+          echo "Building snowflake-darwin-amd64"
+          env CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -o snowflake-darwin-amd64 -trimpath -ldflags "-s -w -buildid=" ./proxy
+          echo "Building snowflake-darwin-arm64"
+          env CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -o snowflake-darwin-arm64 -trimpath -ldflags "-s -w -buildid=" ./proxy
+          echo "Building snowflake-windows-amd64"
+          env CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -o snowflake-windows-amd64.exe -trimpath -ldflags "-s -w -buildid=" ./proxy
+          echo "Building snowflake-windows-arm64"
+          env CGO_ENABLED=0 GOOS=windows GOARCH=arm64 go build -o snowflake-windows-arm64.exe -trimpath -ldflags "-s -w -buildid=" ./proxy
+          echo "Generating Service"
+          cat > snowflake-service.service <<EOF
+          [Unit]
+          Description=Snowflake Service
+          Documentation=https://snowflake.torproject.org/
+          After=network.target nss-lookup.target
+          
+          [Service]
+          User=root
+          NoNewPrivileges=true
+          ExecStart=/usr/local/etc/snowflake/snowflake -capacity 30 -log /usr/local/etc/snowflake/snowflake.log
+          Restart=on-failure
+          RestartPreventExitStatus=23
+
+          [Install]
+          WantedBy=multi-user.target
+          EOF
+          popd || exit 1
+          mkdir -p release
+          mv snowflake/snowflake-* release/
+      
+      - name: Release
+        uses: ncipollo/release-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          name: snowflake-dev-build
+          tag: ${{ env.VERSION }}
+          draft: false
+          prerelease: false
+          artifacts: |
+            ./release/*

@@ -1,0 +1,97 @@
+on:
+  push:
+    paths:
+      - '.github/workflows/geph.yml'
+
+name: Geph Build
+jobs:
+  make-china-list:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Get List
+        run: |
+          # domain list
+          wget https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/direct-list.txt -O domains.txt
+          wget -qO- https://raw.githubusercontent.com/felixonmars/dnsmasq-china-list/master/accelerated-domains.china.conf | sed $'/^#/d' | cut -d\/ -f2 >> domains.txt
+          cat >> domains.txt <<EOF
+          itab.link
+          hitokoto.cn
+          codelife.cc
+          eastmoney.com
+          ourl.co
+          iguokao.com
+          baidu.com
+          EOF
+          cat domains.txt | sort | uniq > china-domains.txt
+          rm -rf domains.txt
+          DOMAIN_LINES=$(wc -l china-domains.txt | cut -d ' ' -f1)
+          echo "china-domains.txt has ${DOMAIN_LINES} lines"
+          # ip list
+          wget https://raw.githubusercontent.com/17mon/china_ip_list/master/china_ip_list.txt -O china-ips.txt
+          IP_LINES=$(wc -l china-ips.txt | cut -d ' ' -f1)
+          echo "china-domains.txt has ${IP_LINES} lines"
+      
+      - uses: actions/upload-artifact@v3
+        with:
+          name: china-domains
+          path: china-domains.txt
+      
+      - uses: actions/upload-artifact@v3
+        with:
+          name: china-ips
+          path: china-ips.txt
+
+  build:
+    needs: make-china-list
+    strategy:
+      fail-fast: false
+    runs-on: windows-latest
+    steps:
+      
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Install Rust and Prepare
+        run: |
+          curl https://win.rustup.rs/ > rustup-init.exe
+          ./rustup-init -y --default-toolchain "stable-i686-pc-windows-msvc" --profile minimal
+          git clone https://github.com/geph-official/geph4-client geph
+          cd geph
+          git checkout 4ae36f8bbc7338e2c32dbd546e7db5e7bed93ff7
+          rm -rfv src/china/china-domains.txt
+          rm -rfv src/china/china-ips.txt
+        shell: bash
+
+      - name: Get china-domains list
+        uses: actions/download-artifact@v3
+        with:
+          name: china-domains
+          path: geph/src/china
+
+      - name: Get china-ips list
+        uses: actions/download-artifact@v3
+        with:
+          name: china-ips
+          path: geph/src/china
+
+      - name: Build Geph
+        run: |
+          cd geph
+          ls src/china/
+          wc -l src/china/china-domains.txt
+          wc -l src/china/china-ips.txt
+          PATH=$PATH:/c/Users/runneradmin/.cargo/bin CARGO_NET_GIT_FETCH_WITH_CLI=true cargo build --release
+          ls
+        shell: bash
+        
+      - name: Compress
+        run: |
+          mv geph\target\release\geph4-client.exe .
+          7z a -m0=lzma2 -mx9 geph4-client.7z geph4-client.exe
+        shell: powershell
+        
+      - name: Release
+        uses: actions/upload-artifact@v3
+        with:
+          name: geph4-client.7z
+          path: geph4-client.7z

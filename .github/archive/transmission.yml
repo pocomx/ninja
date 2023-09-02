@@ -1,0 +1,165 @@
+on:
+  push:
+    paths:
+      - '.github/workflows/transmission.yml'
+  schedule:
+    - cron: "0 18 */1 * *"
+
+name: transmission
+jobs:
+  make-source-tarball:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Get Dependencies
+        run: |
+          set -ex
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            ca-certificates \
+            cmake \
+            libcurl4-openssl-dev \
+            libssl-dev \
+            ninja-build
+      
+      - name: Get Source
+        uses: actions/checkout@v3
+        with:
+          repository: 'transmission/transmission'
+          path: src
+          submodules: recursive
+      
+      - name: Configure
+        run: |
+          cmake \
+            -S src \
+            -B obj \
+            -G Ninja
+      
+      - name: Create source tarball
+        run: cmake --build obj --target package_source
+      
+      - uses: actions/upload-artifact@v3
+        with:
+          name: source-tarball
+          path: obj/transmission*.tar.*
+
+  build:
+    strategy:
+      fail-fast: false
+    needs: make-source-tarball
+    runs-on: ubuntu-20.04
+    steps:
+      
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '16'
+          check-latest: false
+
+      - name: Get Source
+        uses: actions/download-artifact@v3
+        with:
+          name: source-tarball
+      
+      - name: Get Dependencies
+        run: |
+          echo "==============================================="
+          echo "==============================================="
+          echo "==============================================="
+          echo "============Installing apt packages============"
+          echo "==============================================="
+          echo "==============================================="
+          echo "==============================================="
+          set -ex
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+          git \
+          gcc \
+          g++ \
+          wget \
+          curl \
+          ca-certificates \
+          gettext \
+          libcurl4-openssl-dev \
+          libdeflate-dev \
+          libevent-dev \
+          libfmt-dev \
+          libminiupnpc-dev \
+          libnatpmp-dev \
+          libpsl-dev \
+          ninja-build \
+          cmake \
+          python3 \
+          automake \
+          autoconf \
+          pkg-config \
+          libtool \
+          libz-dev \
+          xz-utils \
+          libssl-dev
+      
+      - name: Extract Source
+        run: |
+          mkdir -p src
+          tar xf transmission*.tar.* -C src --strip-components 1
+          rm -rfv transmission*.tar.*
+          mv src/* .
+          rm -rfv src
+
+      - name: Start build
+        run: |
+          echo "==============================================="
+          echo "==============================================="
+          echo "==============================================="
+          echo "============  Version  20221102.1  ============"
+          echo "==============================================="
+          echo "==============================================="
+          echo "==============================================="
+          echo "==============================================="
+          echo "==============================================="
+          echo "==============================================="
+          echo "============Installing npm packages============"
+          echo "==============================================="
+          echo "==============================================="
+          echo "==============================================="
+          npm i yarn
+          npm i mini-css-extract-plugin
+          npm i css-minimizer-webpack-plugin
+          npm i style-loader
+          npm i css-loader
+          npm i sass-loader
+          npm i sass
+          npm i lodash.isequal
+          cmake \
+          -B obj \
+          -G Ninja \
+          -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+          -DCMAKE_INSTALL_PREFIX=pfx \
+          -DENABLE_CLI=ON \
+          -DENABLE_DAEMON=ON \
+          -DENABLE_GTK=OFF \
+          -DENABLE_MAC=OFF \
+          -DENABLE_QT=OFF \
+          -DENABLE_TESTS=ON \
+          -DENABLE_UTILS=ON \
+          -DENABLE_WEB=ON \
+          -DRUN_CLANG_TIDY=OFF
+          cmake --build obj --config RelWithDebInfo
+          cmake --build obj --config RelWithDebInfo --target install/strip
+      
+      - name: Compress
+        run: |
+          mkdir -p 7zip
+          wget "https://www.7-zip.org/a/7z2201-linux-x64.tar.xz" -O 7zip/7zip.tar.xz
+          tar -xvf 7zip/7zip.tar.xz -C 7zip/ && mv 7zip/7zz .
+          rm -rf 7zip && chmod +x 7zz
+          ./7zz a -m0=lzma2 -mx9 transmission-dev-build.7z pfx
+      
+      - name: Release
+        uses: actions/upload-artifact@v3
+        with:
+          name: transmission-dev-build.7z
+          path: transmission-dev-build.7z

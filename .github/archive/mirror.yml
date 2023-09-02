@@ -1,0 +1,74 @@
+on:
+  push:
+    paths:
+      - '.github/workflows/mirror.yml'
+  schedule:
+    - cron: "0 18 */1 * *"
+
+name: Mirror Sync
+jobs:
+  mkvtoolnix:
+    runs-on: ubuntu-20.04
+    env:
+      TZ: Europe/Busingen
+    steps:
+      
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Login into Github && Mirror
+        run: |
+          wget -qO- https://api.github.com/repos/cli/cli/releases/latest | jq ".assets[] | {browser_download_url}" -c | jq .browser_download_url -r | grep "linux_amd64.tar.gz" | wget -i -
+          mkdir -p gh && tar -zxf gh_*.tar.gz -C gh/ --strip-components=1
+          mv gh/bin/gh github && rm -rf gh*
+          git config --global user.email "${{ secrets.EMAIL }}"
+          git config --global user.name "pocomx"
+          echo ${{ secrets.TOKEN }} > token.txt
+          chmod +x github && ./github auth login -p https --hostname "github.com" --with-token < token.txt
+          rm -rf token.txt && ./github auth status
+          git clone --recurse-submodules --bare https://gitlab.com/mbunkus/mkvtoolnix.git
+          cd mkvtoolnix.git
+          git remote set-url origin "https://pocomx:${{ secrets.TOKEN }}@github.com/pocomx/MKVToolNix.git"
+          git push --mirror "https://pocomx:${{ secrets.TOKEN }}@github.com/pocomx/MKVToolNix.git"
+          cd .. && rm -rf mkvtoolnix.git
+          # Update logs
+          rm -rf github
+          echo "Sync MkvToolNix On $(date)" >> .github/update.log
+          # Git Commit
+          git config --local user.name "github-action[bot]"
+          git config --local user.email "${{ secrets.EMAIL }}"
+          git add .
+          git commit -am "Sync MkvToolNix On $(date)"
+      
+      - name: Push Changes
+        uses: ad-m/github-push-action@master
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          branch: ${{ github.ref }}
+          
+#   pypy:
+#     runs-on: ubuntu-20.04
+#     env:
+#       TZ: Europe/Busingen
+#     steps:
+      
+#       - name: Checkout
+#         uses: actions/checkout@v3
+
+#       - name: Login into Github && Mirror
+#         run: |
+#           wget -qO- https://api.github.com/repos/cli/cli/releases/latest | jq ".assets[] | {browser_download_url}" -c | jq .browser_download_url -r | grep "linux_amd64.tar.gz" | wget -i -
+#           mkdir -p gh && tar -zxf gh_*.tar.gz -C gh/ --strip-components=1
+#           mv gh/bin/gh github && rm -rf gh*
+#           git config --global user.email "${{ secrets.EMAIL }}"
+#           git config --global user.name "pocomx"
+#           echo ${{ secrets.TOKEN }} > token.txt
+#           chmod +x github && ./github auth login -p https --hostname "github.com" --with-token < token.txt
+#           rm -rf token.txt && ./github auth status
+#           git clone --recurse-submodules --bare https://foss.heptapod.net/pypy/pypy.git
+#           cd pypy.git
+#           git remote set-url origin "https://pocomx:${{ secrets.TOKEN }}@github.com/pocomx/pypy.git"
+#           git push --mirror "https://pocomx:${{ secrets.TOKEN }}@github.com/pocomx/pypy.git"
+#           cd .. && rm -rf pypy.git
+#
+#     update on 2023.01.27

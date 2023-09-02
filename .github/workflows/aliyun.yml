@@ -1,0 +1,44 @@
+on:
+  push:
+    paths:
+      - '.github/workflows/aliyun.yml'
+
+name: Aliyunpan Dev Build
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+    runs-on: windows-2019
+    steps:
+      
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3.5.1
+        with:
+          node-version: '18'
+          check-latest: true
+
+      - name: Start build
+        run: |
+          mkdir release
+          git clone https://github.com/liupan1890/aliyunpan aliyunpan
+          cd aliyunpan
+          npm install -g yarn
+          yarn install
+          yarn run build
+          7z a -m0=lzma2 -mx9 release.7z release
+          mv release.7z ..\release
+      
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          name: Aliyunpan Dev Build
+          tag_name: $(date +%Y%m%d%H%M)
+          draft: false
+          prerelease: false
+          files: |
+            ./release/*
